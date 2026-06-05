@@ -22,6 +22,7 @@ RUN apt-get update && \
 
 # Build openh264 (Cisco, BSD-2-Clause) — provides H.264 encode + decode.
 # Replaces the GPL x264/x265 builders so the resulting core is LGPL/BSD-clean.
+# Linked only into the multi-threaded (video) core; see ffmpeg-wasm-builder.
 FROM emsdk-base AS openh264-builder
 ENV OPENH264_VERSION=v2.4.1
 ADD https://github.com/cisco/openh264.git#$OPENH264_VERSION /src
@@ -140,11 +141,12 @@ COPY --from=libwebp-builder $INSTALL_DIR $INSTALL_DIR
 COPY --from=libass-builder $INSTALL_DIR $INSTALL_DIR
 COPY --from=zimg-builder $INSTALL_DIR $INSTALL_DIR
 
-# Build ffmpeg
+# Build ffmpeg. openh264 (H.264) is enabled only for the multi-threaded video
+# core; the single-threaded audio core has no pthreads and never needs H.264.
 FROM ffmpeg-base AS ffmpeg-builder
 COPY build/ffmpeg.sh /src/build.sh
 RUN bash -x /src/build.sh \
-      --enable-libopenh264 \
+      ${FFMPEG_MT:+ --enable-libopenh264} \
       --enable-libvpx \
       --enable-libmp3lame \
       --enable-libtheora \
@@ -162,9 +164,9 @@ FROM ffmpeg-builder AS ffmpeg-wasm-builder
 COPY src/bind /src/src/bind
 COPY src/fftools /src/src/fftools
 COPY build/ffmpeg-wasm.sh build.sh
-# libraries to link
+# libraries to link. -lopenh264 is appended per-core in the RUNs below (video/MT
+# only — its internal decoder threads need pthreads, absent in the audio core).
 ENV FFMPEG_LIBS \
-      -lopenh264 \
       -lvpx \
       -lmp3lame \
       -logg \
@@ -184,9 +186,11 @@ ENV FFMPEG_LIBS \
       -lzimg
 RUN mkdir -p /src/dist/umd && bash -x /src/build.sh \
       ${FFMPEG_LIBS} \
+      ${FFMPEG_MT:+ -lopenh264} \
       -o dist/umd/ffmpeg-core.js
 RUN mkdir -p /src/dist/esm && bash -x /src/build.sh \
       ${FFMPEG_LIBS} \
+      ${FFMPEG_MT:+ -lopenh264} \
       -sEXPORT_ES6 \
       -o dist/esm/ffmpeg-core.js
 
