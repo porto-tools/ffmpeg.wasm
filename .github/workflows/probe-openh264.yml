@@ -1,0 +1,21 @@
+name: Probe openh264 build
+
+# De-risk the known "openh264 + emscripten >= 3.1.33" build issue by compiling
+# ONLY the openh264 stage before committing to a full ~70-minute core build.
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    name: Build openh264 stage only
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build only the openh264-builder stage
+        run: docker buildx build --target openh264-builder --load -t oh264-probe .
+      - name: Verify libopenh264.a and pkg-config file exist
+        run: |
+          docker run --rm oh264-probe sh -c "ls -lh /opt/lib/libopenh264.a && ls -lh /opt/lib/pkgconfig/openh264.pc"
