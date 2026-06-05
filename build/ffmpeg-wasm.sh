@@ -7,6 +7,10 @@ set -euo pipefail
 
 EXPORT_NAME="createFFmpegCore"
 
+# NOTE: libpostproc is intentionally NOT linked. It is a GPL-only component
+# (FFmpeg builds it only under --enable-gpl, which we dropped for the LGPL/BSD
+# clean build), so libpostproc.a does not exist. The `pp` filter it provides is
+# unused. Linking -lpostproc here would fail with "unable to find library".
 CONF_FLAGS=(
   -I. 
   -I./src/fftools 
@@ -17,7 +21,6 @@ CONF_FLAGS=(
   -Llibavfilter 
   -Llibavformat 
   -Llibavutil 
-  -Llibpostproc 
   -Llibswresample 
   -Llibswscale 
   -lavcodec 
@@ -25,7 +28,6 @@ CONF_FLAGS=(
   -lavfilter 
   -lavformat 
   -lavutil 
-  -lpostproc 
   -lswresample 
   -lswscale 
   -Wno-deprecated-declarations 
